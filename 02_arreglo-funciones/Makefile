@@ -1,4 +1,4 @@
-PROGRAM=02_matriz-funciones
+PROGRAM=02_arreglo-funciones
 
 run: ${PROGRAM}.o
 	@./${PROGRAM}.o
