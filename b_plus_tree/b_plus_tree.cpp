@@ -41,7 +41,7 @@ void BPlusTree::print()
 
     while (node != NULL)
     {
-        node->print();
+        node->print_neighbor();
         node = node->child_ptr[0];
     }
 }
@@ -111,4 +111,21 @@ BPlusPage *BPlusTree::add_parent(BPlusPage *node_l, BPlusPage *node_r, int key)
     node_r->parent_ptr = parent;
 
     return parent;
+}
+
+BPlusPage* BPlusTree::search(int element) {
+    return tree_search(element, root);
+}
+
+BPlusPage* BPlusTree::tree_search(int element, BPlusPage* node) {
+    if (node->leaf)
+        return node;
+
+    for (int i = 0; i < node->n; i++)
+    {
+        if( element < node->data[i])
+            return tree_search(element, node->child_ptr[i]);
+    }
+
+    return tree_search(element, node->child_ptr[node->n]);
 }

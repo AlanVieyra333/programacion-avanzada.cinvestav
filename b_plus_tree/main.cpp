@@ -27,5 +27,10 @@ int main()
     printf("Arbol B+ construido:\n");
     bPlusTree.print();
 
+    printf("Ingrese el elemento a buscar:\n");
+    scanf("%d", &element);
+    BPlusPage* node = bPlusTree.search(element);
+    node->print();
+
     return 0;
 }

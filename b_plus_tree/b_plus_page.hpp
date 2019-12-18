@@ -17,6 +17,7 @@ public:
     BPlusPage(BPlusPage *other);
     int insert(int element);
     void print();
+    void print_neighbor();
 };
 
 #endif /* b_plus_page_hpp */

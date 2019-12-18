@@ -65,7 +65,7 @@ int BPlusPage::insert(int e)
     return i;
 }
 
-void BPlusPage::print()
+void BPlusPage::print_neighbor()
 {
     BPlusPage *node = this;
 
@@ -79,5 +79,15 @@ void BPlusPage::print()
 
         node = node->right_ptr;
     }
+    printf("\n");
+}
+
+void BPlusPage::print()
+{
+    for (int i = 0; i < this->n; i++)
+    {
+        printf("|%d", this->data[i]);
+    }
+    printf("|\t");
     printf("\n");
 }
