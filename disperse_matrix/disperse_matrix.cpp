@@ -88,25 +88,6 @@ void disperse_matrix::csr2csc_serial(int m, int n, vector<int_t> &csrRowPtr, vec
   return;
 }
 
-void disperse_matrix::print()
-{
-  printf("Tamano: m: %u, n: %u\n", this->m, this->n);
-
-  printf("data: ");
-  for (auto &&element : data)
-    printf("%f ", element);
-
-  printf("\nrows: ");
-  for (auto &&element : rows)
-    printf("%d ", element);
-
-  printf("\ncols: ");
-  for (auto &&element : cols)
-    printf("%d ", element);
-
-  printf("\n"); //*/
-}
-
 vector<decimal_t> disperse_matrix::operator*(vector<decimal_t> const &v)
 {
   vector<decimal_t> result;
@@ -136,15 +117,18 @@ vector<decimal_t> disperse_matrix::operator*(vector<decimal_t> const &v)
   return result;
 }
 
-decimal_t *disperse_matrix::operator*(disperse_matrix const &m2)
+disperse_matrix disperse_matrix::operator*(disperse_matrix const &m2)
 {
-  decimal_t *result = (decimal_t *)malloc(sizeof(decimal_t) * m * n);
+  disperse_matrix result;
 
   if (n != m2.m)
   {
     fprintf(stderr, "Las matrices no pueden multiplicarse.\nTamanos incompatibles.");
     exit(1);
   }
+
+  result.m = m;
+  result.n = m2.n;
 
   /* #### */
   for (int i = 0; i < m; i++)
@@ -169,9 +153,72 @@ decimal_t *disperse_matrix::operator*(disperse_matrix const &m2)
         }
       }
 
-      result[i * m + j] = sum;
+      // Add element.
+      if (sum != 0.0)
+      {
+        // Add new row
+        if (i > result.current_row)
+        {
+          result.rows.push_back(result.data.size());
+          result.current_row = i;
+        }
+
+        result.cols.push_back(j);
+        result.data.push_back(sum);
+      }
     }
   } //*/
 
+  result.rows.push_back(result.data.size());
+
   return result;
+}
+
+void disperse_matrix::print()
+{
+  printf("Tamano: m: %u, n: %u\n", this->m, this->n);
+
+  printf("data: ");
+  for (auto &&element : data)
+    printf("%f ", element);
+
+  printf("\nrows: ");
+  for (auto &&element : rows)
+    printf("%d ", element);
+
+  printf("\ncols: ");
+  for (auto &&element : cols)
+    printf("%d ", element);
+
+  printf("\n"); //*/
+}
+
+void disperse_matrix::print_complete(FILE * out) {
+  decimal_t element;
+
+  fprintf(out, "%d %d\n", m, n);
+
+  for (int_t i = 0; i < m; i++)
+  {
+    vector<int_t> J, V;
+    J.insert(J.end(), cols.begin() + rows[i], cols.begin() + rows[i + 1]);
+    V.insert(V.end(), data.begin() + rows[i], data.begin() + rows[i + 1]);
+
+    for (int_t j = 0; j < n; j++)
+    {
+      element = 0;
+      // Validar que se encuentre en J.
+      for (int ij = 0; ij < J.size(); ij++)
+      {
+        if(j == J[ij]){
+          element = V[ij];
+          break;
+        }
+      }
+
+      fprintf(out, "%lf ", element);
+    }
+    fprintf(out, "\n");
+  }
+  
 }
