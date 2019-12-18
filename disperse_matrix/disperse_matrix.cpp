@@ -6,57 +6,92 @@ disperse_matrix::disperse_matrix()
   current_row = -1;
 }
 
-disperse_matrix::disperse_matrix(std::string filename)
+disperse_matrix::disperse_matrix(std::string filename, int compressed_type)
 {
-  f = fopen(filename.c_str(), "r");
+  FILE *f = fopen(filename.c_str(), "r");
   fscanf(f, "%d %d", &m, &n);
-  
+
   current_row = -1;
 
-  scan_crs();
-}
+  read_matrix(f);
 
-disperse_matrix::~disperse_matrix()
-{
+  if (compressed_type == CSC)
+  {
+    vector<int_t> rows_csc(cols.size()), cols_csc(n + 1);
+    vector<decimal_t> data_csc(data.size());
+
+    csr2csc_serial(m, n, rows, cols, data, cols_csc, rows_csc, data_csc);
+
+    data.clear();
+    rows.clear();
+    cols.clear();
+
+    data.insert(data.end(), data_csc.begin(), data_csc.end());
+    rows.insert(rows.end(), rows_csc.begin(), rows_csc.end());
+    cols.insert(cols.end(), cols_csc.begin(), cols_csc.end());
+  }
+
   fclose(f);
 }
 
-void disperse_matrix::add_crs(decimal_t element, int_t row, int_t col)
+void disperse_matrix::read_matrix(FILE *f)
 {
-  // Add new row
-  if (row > current_row)
-  {
-    rows.push_back(data.size() + 1);
-    current_row = row;
-  }
-  cols.push_back(col);
-  data.push_back(element);
-}
+  decimal_t element;
 
-void disperse_matrix::scan_crs()
-{
-  decimal_t data;
-
-  for (int_t i=0; i<m; i++)
+  for (int_t row = 0; row < m; row++)
   {
-    for (int_t j = 0; j < n; j++)
+    for (int_t col = 0; col < n; col++)
     {
-      fscanf(f, "%lf", &data);
-      
-      if (data != 0.0)
-        this->add_crs(data, i, j);
+      fscanf(f, "%lf", &element);
+
+      if (element != 0.0)
+      {
+        // Add new row
+        if (row > current_row)
+        {
+          rows.push_back(data.size());
+          current_row = row;
+        }
+
+        cols.push_back(col);
+        data.push_back(element);
+      }
     }
   }
 
-  this->rows.push_back(this->data.size() + 1);
+  this->rows.push_back(this->data.size());
+}
 
-  fclose(f);
+// construct an array of size n to record current available position in each column
+void disperse_matrix::csr2csc_serial(int m, int n, vector<int_t> &csrRowPtr, vector<int_t> &csrColIdx, vector<decimal_t> &csrVal, vector<int_t> &cscColPtr, vector<int_t> &cscRowIdx, vector<decimal_t> &cscVal)
+{
+  int *curr = new int[n]();
+
+  for (int i = 0; i < m; i++)
+    for (int j = csrRowPtr[i]; j < csrRowPtr[i + 1]; j++)
+      cscColPtr[csrColIdx[j] + 1]++;
+  // prefix_sum
+
+  for (int i = 1; i < n + 1; i++)
+    cscColPtr[i] += cscColPtr[i - 1];
+
+  for (int i = 0; i < m; i++)
+    for (int j = csrRowPtr[i]; j < csrRowPtr[i + 1]; j++)
+    {
+      int loc = cscColPtr[csrColIdx[j]] + curr[csrColIdx[j]]++;
+      cscRowIdx[loc] = i;
+      cscVal[loc] = csrVal[j];
+    }
+
+  delete[] curr;
+
+  return;
 }
 
 void disperse_matrix::print()
 {
   printf("Tamano: m: %u, n: %u\n", this->m, this->n);
-  
+
   printf("data: ");
   for (auto &&element : data)
     printf("%f ", element);
@@ -72,9 +107,38 @@ void disperse_matrix::print()
   printf("\n"); //*/
 }
 
-disperse_matrix disperse_matrix::operator*(disperse_matrix const &m2)
+vector<decimal_t> disperse_matrix::operator*(vector<decimal_t> const &v)
 {
-  disperse_matrix result;
+  vector<decimal_t> result;
+
+  if (n != v.size())
+  {
+    fprintf(stderr, "La matriz no puede multiplicarse con este vector.\nTamanos incompatibles.");
+    exit(1);
+  }
+
+  /* #### */
+  for (int i = 0; i < v.size(); i++)
+  {
+    decimal_t sum = 0;
+    vector<int_t> J, V;
+    J.insert(J.end(), cols.begin() + rows[i], cols.begin() + rows[i + 1]);
+    V.insert(V.end(), data.begin() + rows[i], data.begin() + rows[i + 1]);
+
+    for (int k = 0; k < J.size(); k++)
+    {
+      sum += V[k] * v[J[k]];
+    }
+
+    result.push_back(sum);
+  }
+
+  return result;
+}
+
+decimal_t *disperse_matrix::operator*(disperse_matrix const &m2)
+{
+  decimal_t *result = (decimal_t *)malloc(sizeof(decimal_t) * m * n);
 
   if (n != m2.m)
   {
@@ -82,19 +146,32 @@ disperse_matrix disperse_matrix::operator*(disperse_matrix const &m2)
     exit(1);
   }
 
-  /*for (int_t i = 1; i <= this->data.size(); i++)
+  /* #### */
+  for (int i = 0; i < m; i++)
   {
-    int_t k1 = this->rows[i];
-    int_t k2 = this->rows[i + 1] - 1;
-    decimal_t sum = 0.0;
-
-    for (int_t j = k1; j <= k2; j++)
+    for (int j = 0; j < n; j++)
     {
-      sum = sum + this->data[j]; // * vec(JA(j));
-    }
+      decimal_t sum = 0;
 
-    //vec1(i) = sum;
-  }*/
+      vector<int_t> AJ, AV, BJ, BV;
+      AJ.insert(AJ.end(), cols.begin() + rows[i], cols.begin() + rows[i + 1]);
+      AV.insert(AV.end(), data.begin() + rows[i], data.begin() + rows[i + 1]);
+
+      BJ.insert(BJ.end(), m2.rows.begin() + m2.cols[j], m2.rows.begin() + m2.cols[j + 1]);
+      BV.insert(BV.end(), m2.data.begin() + m2.cols[j], m2.data.begin() + m2.cols[j + 1]);
+
+      for (int k = 0; k < AJ.size(); k++)
+      {
+        for (int l = 0; l < BJ.size(); l++)
+        {
+          if(AJ[k] == BJ[l])
+            sum += AV[k] * BV[l];
+        }
+      }
+
+      result[i * m + j] = sum;
+    }
+  } //*/
 
   return result;
 }
